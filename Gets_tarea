@@ -1,0 +1,208 @@
+//activity_main.xml
+?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/titleEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint ="TITULO DE LA TAREA" />
+
+    <EditText
+        android:id="@+id/descriptionEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="descripcion de la tarea" />
+
+    <Button
+        android:id="@+id/addTaskButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="AGREAGAR TAREA" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/taskRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</LinearLayout>
+
+//task_item.xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <CheckBox
+            android:id="@+id/taskCheckbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/taskTitle"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:paddingStart="8dp"
+            android:textSize="18sp" />
+
+        <ImageButton
+            android:id="@+id/deleteButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_delete"
+            android:contentDescription="Delete Task" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/taskDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:paddingStart="24dp"
+        android:paddingTop="4dp"
+        android:textColor="@android:color/darker_gray" />
+</LinearLayout>
+
+//MainActivity.kt
+class MainActivity : AppCompatActivity() {
+    private lateinit var taskModel: TaskModel
+    private lateinit var taskAdapter: TaskAdapter
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var titleEditText: EditText
+    private lateinit var descriptionEditText: EditText
+    private lateinit var addTaskButton: Button
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView (R.layout.activity_main)
+
+        taskModel = TaskModel()
+
+        recyclerView = findViewById(R.id.taskRecyclerView)
+        recyclerView.layoutManager = LinearLayoutManager(this)
+
+        titleEditText = findViewById(R.id.titleEditText)
+        descriptionEditText = findViewById(R.id.descriptionEditText)
+        addTaskButton = findViewById(R.id.addTaskButton)
+
+        taskAdapter = TaskAdapter(
+            tasks = taskModel.getAllTasks(),
+            onTaskChecked = { id -> taskModel.markTaskAsCompleted(id) },
+            onTaskDeleted = { id ->
+                taskModel.deleteTask(id)
+                taskAdapter.updateTasks(taskModel.getAllTasks())
+            }
+        )
+        recyclerView.adapter = taskAdapter
+
+        addTaskButton.setOnClickListener {
+            val title = titleEditText.text.toString()
+            val description = descriptionEditText.text.toString()
+            if (title.isNotEmpty() && description.isNotEmpty()) {
+                taskModel.createTask(title, description)
+                taskAdapter.updateTasks(taskModel.getAllTasks())
+                titleEditText.text.clear()
+                descriptionEditText.text.clear()
+            }
+        }
+    }
+}
+
+Task.kt
+data class Task(
+    var id: Int,
+    var title: String,
+    var description: String,
+    var completed: Boolean = false
+)
+
+TaskModel.kt
+class TaskModel {
+    private val tasks = mutableListOf<Task>()
+    private var nextId = 1
+
+    // Crear una nueva tarea
+    fun createTask(title: String, description: String) {
+        val newTask = Task(id = nextId++, title = title, description = description)
+        tasks.add(newTask)
+    }
+
+    // Obtener todas las tareas
+    fun getAllTasks(): List<Task> {
+        return tasks
+    }
+
+    // Marcar una tarea como completada
+    fun markTaskAsCompleted(id: Int) {
+        val task = tasks.find { it.id == id }
+        task?.completed = true
+    }
+
+    // Eliminar una tarea
+    fun deleteTask(id: Int) {
+        tasks.removeIf { it.id == id }
+    }
+}
+
+TaskAdapter.kt
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.CheckBox
+import android.widget.ImageButton
+import android.widget.TextView
+import androidx.recyclerview.widget.RecyclerView
+
+class TaskAdapter(
+    private var tasks: List<Task>,
+    private val onTaskChecked: (Int) -> Unit,
+    private val onTaskDeleted: (Int) -> Unit
+) : RecyclerView.Adapter<TaskAdapter.TaskViewHolder>() {
+
+    class TaskViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val taskCheckbox: CheckBox = view.findViewById(R.id.taskCheckbox)
+        val taskTitle: TextView = view.findViewById(R.id.taskTitle)
+        val taskDescription: TextView = view.findViewById(R.id.taskDescription)
+        val deleteButton: ImageButton = view.findViewById(R.id.deleteButton)
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TaskViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.task_item, parent, false)
+        return TaskViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: TaskViewHolder, position: Int) {
+        val task = tasks[position]
+        holder.taskTitle.text = task.title
+        holder.taskDescription.text = task.description
+        holder.taskCheckbox.isChecked = task.completed
+
+        holder.taskCheckbox.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                onTaskChecked(task.id)
+            }
+        }
+
+        holder.deleteButton.setOnClickListener {
+            onTaskDeleted(task.id)
+        }
+    }
+
+    override fun getItemCount() = tasks.size
+
+    fun updateTasks(newTasks: List<Task>) {
+        tasks = newTasks
+        notifyDataSetChanged()
+    }
+}
